@@ -16,5 +16,5 @@
 **Hours worked:** 0.5
 **What I did:** Finalized the "Audit Engine" core logic. Built a category-based overlap detection system that flags redundant AI tools (e.g., Cursor vs Copilot). Added Step 4 (Results) which displays a calculated "Potential Savings" score and an AI-generated text prediction for burn-per-seat reduction.
 **What I learned:** Implemented data-driven UI feedback. Learned how to map business categories to tool IDs to identify technical redundancies—turning a simple calculator into a consultative tool.
-**Blockers:** I had 3 exams to study and appear for, so the project time dedication got compromized.Rapid state-tree updates across 4 steps (resolved via optional chaining and structured interfaces).
+**Blockers:** I had 3 exams to study and appear for, so the project time dedication got compromized. Also had to change the logic since the previous design didn't align quite well with the product description.
 **Plan for tomorrow:** Refine the visualization with a Bar Chart (Recharts) and prepare the "User Interview" documentation for final submission.
