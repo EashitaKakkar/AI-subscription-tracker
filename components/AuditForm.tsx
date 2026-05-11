@@ -156,34 +156,36 @@ export default function AuditForm() {
       )}
 
       {step === 4 && (
-        <div className="space-y-6 animate-in zoom-in-95">
-          <div className="text-center p-8 bg-emerald-500/10 border border-emerald-500/20 rounded-3xl">
-            <p className="text-emerald-500 text-xs font-mono uppercase tracking-widest">Monthly Optimization Potental</p>
-            <h3 className="text-5xl font-black text-white mt-2">${(calculateTotal() * 0.35).toFixed(0)}</h3>
-          </div>
+  <div className="space-y-6 animate-in zoom-in-95">
+    <div className="text-center p-8 bg-emerald-500/10 border border-emerald-500/20 rounded-3xl">
+      <p className="text-emerald-500 text-xs font-mono uppercase tracking-widest">Est. Annual Savings</p>
+      <h3 className="text-5xl font-black text-white mt-2">${(calculateTotal() * 12 * 0.30).toFixed(0)}</h3>
+      <p className="text-slate-500 text-xs mt-2">Based on {formData.teamSize} seats across {formData.selectedTools.length} tools</p>
+    </div>
 
-          <div className="space-y-3">
-            <h4 className="text-slate-500 text-[10px] uppercase font-black tracking-widest">Wasted Coverage Detected</h4>
-            {getAuditReport().map((msg, i) => (
-              <div key={i} className="p-4 bg-red-500/5 border border-red-500/10 rounded-xl text-red-400 text-xs leading-relaxed">
-                <span className="font-bold">Recommendation:</span> {msg}
-              </div>
-            ))}
-            {getAuditReport().length === 0 && <p className="text-emerald-400 text-xs">✅ Your stack usage is efficient across tasks.</p>}
-          </div>
-
-          <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800">
-            <h4 className="text-white font-bold mb-2">Credex Strategy Note:</h4>
-            <p className="text-slate-400 text-xs leading-relaxed italic">
-              Since you are using {formData.teamSize} seats, the overlap in your debugging tools suggests a $ {((calculateTotal() * 12) * 0.15).toFixed(0)} annual hidden tax. 
-              Consolidating to a single enterprise seat for Cursor would cover 90% of your current Claude/Copilot usage.
-            </p>
-          </div>
-
-          <button onClick={() => alert("Email Gate + Unique URL share logic goes here!")} className="w-full bg-white py-4 rounded-xl font-bold text-slate-950 mb-2">Claim Full Savings Report</button>
-          <button onClick={() => setStep(1)} className="w-full text-slate-500 text-xs font-bold hover:text-white transition-colors">Restart Audit</button>
+    <div className="space-y-3">
+      <h4 className="text-white text-sm font-bold">Actionable Advice:</h4>
+      {getAuditReport().map((msg, i) => (
+        <div key={i} className="p-4 bg-slate-950 border-l-4 border-emerald-500 rounded-r-xl">
+          <p className="text-white text-xs font-bold mb-1">REDUNDANCY DETECTED</p>
+          <p className="text-slate-400 text-[11px] leading-relaxed">{msg}</p>
         </div>
-      )}
+      ))}
+    </div>
+
+    {/* Email Gate for the "Entrepreneurial" Points */}
+    <div className="p-6 bg-emerald-500 rounded-2xl">
+      <h4 className="text-slate-950 font-black text-lg leading-tight mb-2">Get the Full PDF Audit & Comparison Matrix</h4>
+      <div className="flex gap-2">
+        <input type="email" placeholder="eashita@example.com" className="flex-1 p-3 rounded-lg bg-white/20 border border-slate-950/10 placeholder:text-slate-700 text-slate-950 outline-none" />
+        <button onClick={() => alert("Report sent! Unique URL: spendlens.ai/share/7x9z2")} className="bg-slate-950 text-white px-4 py-2 rounded-lg font-bold text-sm">Send</button>
+      </div>
+      <p className="text-slate-900 text-[10px] mt-3 font-medium">Join 500+ teams optimizing their AI burn with SpendLens.</p>
+    </div>
+
+    <button onClick={() => setStep(1)} className="w-full text-slate-500 text-xs font-bold hover:text-white transition-colors">Restart Analysis</button>
+  </div>
+)}
     </div>
   );
 }
