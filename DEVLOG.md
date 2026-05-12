@@ -18,3 +18,10 @@
 **What I learned:** Implemented data-driven UI feedback. Learned how to map business categories to tool IDs to identify technical redundancies—turning a simple calculator into a consultative tool.
 **Blockers:** I had 3 exams to study and appear for, so the project time dedication got compromized. Also had to change the logic since the previous design didn't align quite well with the product description.
 **Plan for tomorrow:** Refine the visualization with a Bar Chart (Recharts) and prepare the "User Interview" documentation for final submission.
+
+## Day 4 — 2026-05-11
+**Hours worked:** 1
+**What I did:** Completed the "Value-First" end-to-end user journey. Refined the Audit Engine to provide specific "Drop vs. Keep" advice based on task redundancy. Integrated an email capture gate at the end of the flow to satisfy the lead-generation requirement.
+**What I learned:** The difference between a mock UI (current alert system) and a production mail server. Evaluated services like Resend and Nodemailer for the MERN backend integration.
+**Blockers:** Had an exam to study for, so couldn't dedicate much time.
+**Plan for tomorrow:** Add the "Share via URL" feature using dynamic routing and implement a simple bar chart to visualize the $ amount of waste.
