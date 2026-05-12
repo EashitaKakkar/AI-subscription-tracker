@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Interface matches AuditForm.tsx to ensure consistent typing
 interface AdviceItem {
   tool: string;
   action: string;
@@ -13,21 +12,17 @@ interface AdviceItem {
 
 export async function POST(req: Request) {
   try {
-    // Destructuring names now exactly match the 'auditData' object in AuditForm.tsx
     const { email, teamSize, tools, savings, advice = [] } = await req.json();
 
-    // 1. Validation
+    
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
-    // 2. Logic for Email Personalization
-    // 'savings' represents total annual potential savings
     const monthlySavings = (Number(savings) || 0) / 12;
     const isHighSavings = monthlySavings >= 500;
     const isOptimal = (Number(savings) || 0) < 100;
 
-    // 3. Build HTML Content
     let emailHtml = "";
 
     if (isOptimal) {
@@ -73,7 +68,6 @@ export async function POST(req: Request) {
       `;
     }
 
-    // 4. Send via Resend
     await resend.emails.send({
       from: 'SpendLens Audit <onboarding@resend.dev>',
       to: email,
@@ -81,7 +75,7 @@ export async function POST(req: Request) {
       html: emailHtml,
     });
 
-    return NextResponse.json({ success: true, message: "Audit email delivered successfully" });
+    return NextResponse.json({ success: true, message: "Audit sent to your email, check your spam if not found in inbox" });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
