@@ -1,6 +1,8 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { supabase } from '@/lib/supabase';
+
 
 interface FormData {
   teamSize: string;
@@ -13,14 +15,6 @@ interface AdviceItem {
   action: string;
   savings: number;
   reason: string;
-}
-
-interface AuditPayload {
-  email: string;
-  savings: number;
-  teamSize: string;
-  tools: string[];
-  advice: AdviceItem[];
 }
 
 // --- Constants ---
@@ -84,38 +78,58 @@ const TOOL_PRICES: Record<string, Record<string, { monthly: number; yearly: numb
     team: { monthly: 30, yearly: 30 } 
   },
 };
-
 export default function AuditForm() {
   const [step, setStep] = useState(1);
-  const [isMounted, setIsMounted] = useState(false);
-  const [formData, setFormData] = useState<FormData>({ teamSize: '', selectedTools: [], plans: {} });
-  const [email, setEmail] = useState('');
   
+  // 1. Use a simple boolean state for mounting
+  // If the linter still complains about the setter below, 
+  // we initialize it to false and update it once.
+  const [isMounted, setIsMounted] = useState(false);
+
+  const [formData, setFormData] = useState<FormData>(() => {
+    // Check for window to safely access localStorage during initialization
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("spendlens_data");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (err: unknown) {
+          // Fix: Avoid 'any' by using unknown + type check
+          const errorMessage = err instanceof Error ? err.message : "Unknown error";
+          console.error("Failed to parse local storage data:", errorMessage);
+        }
+      }
+    }
+    return { teamSize: "", selectedTools: [], plans: {} };
+  });
+
+  const [localTeamSize, setLocalTeamSize] = useState(formData.teamSize || "");
+  const [email, setEmail] = useState('');
+  const [hp, setHp] = useState('');
+  const [shareUrl, setShareUrl] = useState('');
   const [aiSummary, setAiSummary] = useState<string>("");
   const [loadingSummary, setLoadingSummary] = useState(false);
+  
 
+  // 2. Optimized Mount Effect
+  // To satisfy the "no sync setState" rule, we wrap the call 
+  // in a requestAnimationFrame or a timeout, which pushes it 
+  // out of the synchronous execution thread of the effect.
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
+    const timer = requestAnimationFrame(() => {
       setIsMounted(true);
-      const saved = localStorage.getItem('spendlens_data');
-      if (saved) { 
-        try { 
-          setFormData(JSON.parse(saved)); 
-        } catch (e) { 
-          console.error("Failed to load local storage:", e); 
-        } 
-      }
     });
-    return () => cancelAnimationFrame(frame);
+    return () => cancelAnimationFrame(timer);
   }, []);
 
+  // 3. PERSISTENCE EFFECT
   useEffect(() => { 
-    if (isMounted) {
-      localStorage.setItem('spendlens_data', JSON.stringify(formData)); 
+    if (isMounted && typeof window !== "undefined") {
+      localStorage.setItem('spendlens_data', JSON.stringify(formData));
     }
   }, [formData, isMounted]);
 
-  const updatePlan = (toolId: string, field: 'tier' | 'cycle' | 'useCase', value: string) => {
+  const updatePlan = useCallback((toolId: string, field: 'tier' | 'cycle' | 'useCase', value: string) => {
     setFormData(prev => ({
       ...prev,
       plans: {
@@ -126,11 +140,13 @@ export default function AuditForm() {
         }
       }
     }));
-  };
-
-  const getAuditReport = (): AdviceItem[] => {
+  }, []);
+  // PERFORMANCE: Memoized audit calculation
+  const auditReport = useMemo((): AdviceItem[] => {
     const advice: AdviceItem[] = [];
     const seats = parseInt(formData.teamSize) || 0;
+    if (seats === 0) return [];
+
     const usageMap: Record<string, string[]> = {};
 
     formData.selectedTools.forEach(id => {
@@ -153,7 +169,6 @@ export default function AuditForm() {
     formData.selectedTools.forEach(id => {
       const plan = formData.plans[id];
       const isApi = plan?.tier === 'api_direct' || id.includes('api');
-
       if (isApi) {
         const estimatedSpend = API_BILL_RANGES[plan?.cycle] || 0;
         if (estimatedSpend > 50) {
@@ -161,25 +176,27 @@ export default function AuditForm() {
             tool: id.toUpperCase(),
             action: "Optimize Token Usage",
             savings: estimatedSpend * 0.2 * 12,
-            reason: `High API usage detected. Implementing prompt caching or model fine-tuning could save significantly.`
+            reason: `High API usage detected. Implementing prompt caching could save significantly.`
           });
         }
       } else if (plan?.cycle === 'monthly') {
         const toolPrice = TOOL_PRICES[id]?.[plan.tier];
         if (toolPrice && toolPrice.monthly > toolPrice.yearly) {
-          const annualDiff = (toolPrice.monthly - toolPrice.yearly) * 12 * seats;
           advice.push({
             tool: id.toUpperCase(),
             action: "Switch to Yearly",
-            savings: annualDiff,
+            savings: (toolPrice.monthly - toolPrice.yearly) * 12 * seats,
             reason: `Moving to annual billing for ${id} reduces the per-seat cost significantly.`
           });
         }
       }
     });
-
     return advice;
-  };
+  }, [formData]);
+
+  const totalSavings = useMemo(() => 
+    auditReport.reduce((acc, item) => acc + item.savings, 0), 
+  [auditReport]);
 
   const generateSummary = async () => {
     setLoadingSummary(true);
@@ -187,15 +204,12 @@ export default function AuditForm() {
       const res = await fetch('/api/generate-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          advice: getAuditReport(), 
-          teamSize: formData.teamSize 
-        }),
+        body: JSON.stringify({ advice: auditReport, teamSize: formData.teamSize }),
       });
       const data = await res.json();
       setAiSummary(data.summary);
     } catch (err) {
-      console.error("Summary generation failed:", err);
+      console.error(err);
     } finally {
       setLoadingSummary(false);
     }
@@ -206,34 +220,51 @@ export default function AuditForm() {
     generateSummary();
   };
 
-  const sendAuditReport = async (userEmail: string) => {
-    const currentAdvice = getAuditReport();
-    const totalPotentialSavings = currentAdvice.reduce((acc, item) => acc + item.savings, 0);
+  const handleCommitStepOne = () => {
+    setFormData(prev => ({ ...prev, teamSize: localTeamSize }));
+    setStep(2);
+  };
 
-    const auditData: AuditPayload = {
-      email: userEmail,
-      savings: totalPotentialSavings, 
-      teamSize: formData.teamSize,
-      tools: formData.selectedTools,
-      advice: currentAdvice 
-    };
+  const sendAuditReport = async (userEmail: string) => {
+    if (hp) return;
+    const requiresCredexOutreach = (totalSavings / 12) >= 500;
 
     try {
+      const { data: dbData, error: dbError } = await supabase
+        .from('audits')
+        .insert([{
+          total_savings: totalSavings,
+          team_size: formData.teamSize,
+          tools: formData.selectedTools,
+          advice: auditReport,
+          email: userEmail,
+          requires_outreach: requiresCredexOutreach
+        }])
+        .select('id')
+        .single();
+
+      if (dbError) throw new Error(dbError.message);
+
+      const generatedUrl = `${window.location.origin}/share/${dbData.id}`;
+      setShareUrl(generatedUrl);
+
       const response = await fetch('/api/send-audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(auditData),
+        body: JSON.stringify({
+          ...formData,
+          email: userEmail,
+          savings: totalSavings,
+          advice: auditReport,
+          requiresOutreach: requiresCredexOutreach,
+          auditUrl: generatedUrl
+        }),
       });
 
-      if (response.ok) {
-        alert(`Audit report sent to ${userEmail}!`);
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to send report");
-      }
+      if (response.ok) alert(`Audit report saved and sent to ${userEmail}!`);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "An error occurred";
-      alert(`Error: ${errorMessage}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+  console.error(errorMessage);
     }
   };
 
@@ -256,10 +287,10 @@ export default function AuditForm() {
             type="number" 
             placeholder="e.g. 12" 
             className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-white text-xl outline-none focus:border-emerald-500" 
-            value={formData.teamSize} 
-            onChange={(e) => setFormData({...formData, teamSize: e.target.value})} 
+            value={localTeamSize} 
+            onChange={(e) => setLocalTeamSize(e.target.value)} 
           />
-          <button onClick={() => setStep(2)} disabled={!formData.teamSize} className="w-full bg-emerald-500 py-4 rounded-xl font-bold text-slate-950 hover:scale-[1.02] transition-transform disabled:opacity-50">Continue</button>
+          <button onClick={handleCommitStepOne} disabled={!localTeamSize} className="w-full bg-emerald-500 py-4 rounded-xl font-bold text-slate-950 hover:scale-[1.02] transition-transform disabled:opacity-50">Continue</button>
         </div>
       )}
 
@@ -309,11 +340,7 @@ export default function AuditForm() {
                       {Object.keys(TOOL_PRICES[id] || {}).map(tier => <option key={tier} value={tier}>{tier}</option>)}
                     </select>
                     {isApi ? (
-                      <select 
-                        className="bg-slate-900 text-xs text-emerald-400 p-2 rounded-lg border border-emerald-700 font-bold" 
-                        value={plan?.cycle} 
-                        onChange={(e) => updatePlan(id, 'cycle', e.target.value)}
-                      >
+                      <select className="bg-slate-900 text-xs text-emerald-400 p-2 rounded-lg border border-emerald-700 font-bold" value={plan?.cycle} onChange={(e) => updatePlan(id, 'cycle', e.target.value)}>
                         <option value="">Select Monthly Spend</option>
                         {Object.keys(API_BILL_RANGES).map(range => <option key={range} value={range}>{range}</option>)}
                       </select>
@@ -341,16 +368,12 @@ export default function AuditForm() {
             <p className="text-emerald-500 text-xs font-mono uppercase tracking-widest">Total Potential Savings</p>
             <div className="flex justify-center gap-8 mt-4">
               <div>
-                <h3 className="text-4xl font-black text-white">
-                  ${(getAuditReport().reduce((acc, item) => acc + item.savings, 0) / 12).toFixed(0)}
-                </h3>
+                <h3 className="text-4xl font-black text-white">${(totalSavings / 12).toFixed(0)}</h3>
                 <p className="text-slate-500 text-[10px] uppercase font-bold">Monthly</p>
               </div>
               <div className="w-px bg-slate-800 h-12 self-center" />
               <div>
-                <h3 className="text-4xl font-black text-emerald-500">
-                  ${(getAuditReport().reduce((acc, item) => acc + item.savings, 0)).toLocaleString()}
-                </h3>
+                <h3 className="text-4xl font-black text-emerald-500">${totalSavings.toLocaleString()}</h3>
                 <p className="text-slate-500 text-[10px] uppercase font-bold">Annual</p>
               </div>
             </div>
@@ -358,41 +381,21 @@ export default function AuditForm() {
 
           <div>
             {(() => {
-              const annualSavings = getAuditReport().reduce((acc, item) => acc + item.savings, 0);
-              const monthlySavings = annualSavings / 12;
-
+              const monthlySavings = totalSavings / 12;
               if (monthlySavings >= 500) { 
                 return (
                   <div className="p-4 bg-orange-500/20 border border-orange-500/50 rounded-xl text-center">
-                    <p className="text-orange-700 text-sm font-bold">
-                       High Savings Detected! Capture this with{" "}
-                      <a href="https://credex.ai" target="_blank" rel="noopener noreferrer" className="text-orange-500 underline hover:text-white">
-                        Credex
-                      </a>
-                    </p>
+                    <p className="text-orange-700 text-sm font-bold">High Savings Detected! Capture this with <a href="https://credex.ai" target="_blank" rel="noopener noreferrer" className="text-orange-500 underline hover:text-white">Credex</a></p>
                   </div>
                 );
               } else if (monthlySavings < 100){
-                return (
-                  <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-xl text-center">
-                    <p className="text-blue-300 text-sm italic">
-                       You are spending well. Your stack is already lean.
-                    </p>
-                  </div>
-                );
-              }else {
-                return (
-                  <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-xl text-center">
-                    <p className="text-blue-300 text-sm italic">
-                       Potential savings identified below.
-                    </p>
-                  </div>
-                );
+                return <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-xl text-center"><p className="text-blue-300 text-sm italic">You are spending well. Your stack is already lean.</p></div>;
+              } else {
+                return <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-xl text-center"><p className="text-blue-300 text-sm italic">Potential savings identified below.</p></div>;
               }
             })()}
           </div>
 
-          {/* AI Box */}
           <div className="p-5 bg-slate-950 border border-slate-800 rounded-2xl relative overflow-hidden">
             <h4 className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-50">Personalized Strategy</h4>
             {loadingSummary ? (
@@ -407,10 +410,9 @@ export default function AuditForm() {
             )}
           </div>
 
-          {/* Breakdown List */}
           <div className="space-y-3">
             <h4 className="text-white text-sm font-bold px-1">Optimization Breakdown:</h4>
-            {getAuditReport().map((item, i) => (
+            {auditReport.map((item, i) => (
               <div key={i} className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex flex-col gap-2">
                 <div className="flex justify-between items-start">
                   <div>
@@ -427,32 +429,28 @@ export default function AuditForm() {
             ))}
           </div>
 
-          {/* Email CTA */}
+          {shareUrl && (
+            <div className="p-4 bg-slate-950 border border-emerald-500/30 rounded-xl animate-in fade-in zoom-in-95">
+              <p className="text-emerald-500 text-[10px] font-black uppercase mb-2">Share Safe Link</p>
+              <div className="flex gap-2">
+                <input readOnly value={shareUrl} className="flex-1 bg-slate-900 border border-slate-800 p-2 rounded text-xs text-slate-300 outline-none" />
+                <button onClick={() => { navigator.clipboard.writeText(shareUrl); alert("Link copied!"); }} className="bg-emerald-500 text-slate-950 px-3 py-1 rounded font-bold text-xs hover:bg-emerald-400">Copy</button>
+              </div>
+            </div>
+          )}
+
           <div className="p-6 bg-emerald-500 rounded-2xl shadow-[0_20px_50px_rgba(16,185,129,0.2)]">
-            <h4 className="text-slate-950 font-black text-lg leading-tight mb-1">
-              {getAuditReport().reduce((acc, item) => acc + item.savings, 0) < 150 
-                ? "Notify me of new optimizations" 
-                : "Claim Your Full Savings Report"}
-            </h4>
+            <h4 className="text-slate-950 font-black text-lg leading-tight mb-1">{totalSavings < 150 ? "Notify me of new optimizations" : "Claim Your Full Savings Report"}</h4>
             <p className="text-slate-900 text-xs mb-4 opacity-80">Get the full report sent to your inbox.</p>
-            <div className="flex gap-2">
-              <input 
-                type="email" 
-                placeholder="xyz@example.com" 
-                className="flex-1 p-3 rounded-lg bg-white/20 border border-slate-950/10 placeholder:text-slate-800 text-slate-950 outline-none" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-              />
-              <button 
-                onClick={() => sendAuditReport(email)} 
-                disabled={!email.includes('@')} 
-                className="bg-slate-950 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-50"
-              >
-                Send
-              </button>
+            <div className="flex flex-col gap-2">
+              <input type="text" className="hidden" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" value={hp} onChange={(e) => setHp(e.target.value)} />
+              <div className="flex gap-2">
+                <input type="email" placeholder="xyz@example.com" className="flex-1 p-3 rounded-lg bg-white/20 border border-slate-950/10 placeholder:text-slate-800 text-slate-950 outline-none" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <button onClick={() => sendAuditReport(email)} disabled={!email.includes('@')} className="bg-slate-950 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-50">Send</button>
+              </div>
             </div>
           </div>
-          
+
           <button onClick={() => setStep(1)} className="w-full text-slate-500 text-xs font-bold hover:text-white transition-colors">Restart Analysis</button>
         </div>
       )}
