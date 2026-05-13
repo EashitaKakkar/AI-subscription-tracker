@@ -3,7 +3,7 @@
 
 A high-fidelity tool built for startup founders and engineering managers to audit, optimize, and reduce their annual AI software spend. By analyzing team size and tool overlap, **SpendLens** identifies redundant subscriptions and surfaces real-world savings through smarter tier management and Credex infrastructure credits.
 
-**Live Demo:** [https://ai-subscription-tracker-two.vercel.app/](https://ai-subscription-tracker-two.vercel.app/)
+**Live Demo:** [https://ai-subscription-tracker-89nnlm0ju-eashitakakkars-projects.vercel.app/](https://ai-subscription-tracker-89nnlm0ju-eashitakakkars-projects.vercel.app/)
 
 ---
 
