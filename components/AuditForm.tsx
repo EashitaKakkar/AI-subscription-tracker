@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 interface FormData {
   teamSize: string;
@@ -90,11 +91,8 @@ export default function AuditForm() {
   const [formData, setFormData] = useState<FormData>({ teamSize: '', selectedTools: [], plans: {} });
   const [email, setEmail] = useState('');
   
-  // AI Summary States
   const [aiSummary, setAiSummary] = useState<string>("");
   const [loadingSummary, setLoadingSummary] = useState(false);
-
-  // --- Lifecycles ---
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -116,8 +114,6 @@ export default function AuditForm() {
       localStorage.setItem('spendlens_data', JSON.stringify(formData)); 
     }
   }, [formData, isMounted]);
-
-  // --- Logic Handlers ---
 
   const updatePlan = (toolId: string, field: 'tier' | 'cycle' | 'useCase', value: string) => {
     setFormData(prev => ({
@@ -230,14 +226,13 @@ export default function AuditForm() {
       });
 
       if (response.ok) {
-        alert(`Audit report sent to ${userEmail}! Check your spam if not found in inbox`);
+        alert(`Audit report sent to ${userEmail}!`);
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to send report");
       }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-      console.error("Email failed:", errorMessage);
+      const errorMessage = error instanceof Error ? error.message : "An error occurred";
       alert(`Error: ${errorMessage}`);
     }
   };
@@ -292,7 +287,10 @@ export default function AuditForm() {
               </div>
             ))}
           </div>
-          <button onClick={() => setStep(3)} className="w-full bg-emerald-500 py-4 rounded-xl font-bold text-slate-950">Next: Tiers</button>
+          <div className='flex gap-3'>
+            <button onClick={() => setStep(1)} className="w-full bg-slate-900 text-emerald-400 py-4 rounded-xl font-bold border border-emerald-700">Back</button>
+            <button onClick={() => setStep(3)} className="w-full bg-emerald-500 py-4 rounded-xl font-bold text-slate-950">Next</button>
+          </div>
         </div>
       )}
 
@@ -303,7 +301,6 @@ export default function AuditForm() {
             {formData.selectedTools.map(id => {
               const plan = formData.plans[id];
               const isApi = plan?.tier === 'api_direct' || id.includes('api');
-
               return (
                 <div key={id} className="p-4 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center">
                   <span className="text-white font-bold">{id.toUpperCase()}</span>
@@ -311,7 +308,6 @@ export default function AuditForm() {
                     <select className="bg-slate-900 text-xs text-white p-2 rounded-lg border border-slate-700" value={plan?.tier} onChange={(e) => updatePlan(id, 'tier', e.target.value)}>
                       {Object.keys(TOOL_PRICES[id] || {}).map(tier => <option key={tier} value={tier}>{tier}</option>)}
                     </select>
-
                     {isApi ? (
                       <select 
                         className="bg-slate-900 text-xs text-emerald-400 p-2 rounded-lg border border-emerald-700 font-bold" 
@@ -332,13 +328,15 @@ export default function AuditForm() {
               );
             })}
           </div>
-          <button onClick={handleViewAnalysis} className="w-full bg-emerald-500 py-4 rounded-xl font-bold text-slate-950 shadow-[0_0_20px_rgba(16,185,129,0.3)]">View Analysis</button>
+          <div className='flex gap-3'>
+           <button onClick={() => setStep(2)} className="w-full bg-slate-900 text-emerald-400 py-4 rounded-xl font-bold border border-emerald-700">Back</button>
+           <button onClick={handleViewAnalysis} className="w-full bg-emerald-500 py-4 rounded-xl font-bold text-slate-950">View Analysis</button>
+          </div>
         </div>
       )}
 
       {step === 4 && (
         <div className="space-y-6 animate-in zoom-in-95">
-          {/* 1. Hero Section */}
           <div className="text-center p-8 bg-emerald-500/10 border border-emerald-500/20 rounded-3xl">
             <p className="text-emerald-500 text-xs font-mono uppercase tracking-widest">Total Potential Savings</p>
             <div className="flex justify-center gap-8 mt-4">
@@ -358,50 +356,58 @@ export default function AuditForm() {
             </div>
           </div>
 
-          {/* AI Personalized Summary */}
+          <div>
+            {(() => {
+              const annualSavings = getAuditReport().reduce((acc, item) => acc + item.savings, 0);
+              const monthlySavings = annualSavings / 12;
+
+              if (monthlySavings >= 500) { 
+                return (
+                  <div className="p-4 bg-orange-500/20 border border-orange-500/50 rounded-xl text-center">
+                    <p className="text-orange-700 text-sm font-bold">
+                       High Savings Detected! Capture this with{" "}
+                      <a href="https://credex.ai" target="_blank" rel="noopener noreferrer" className="text-orange-500 underline hover:text-white">
+                        Credex
+                      </a>
+                    </p>
+                  </div>
+                );
+              } else if (monthlySavings < 100){
+                return (
+                  <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-xl text-center">
+                    <p className="text-blue-300 text-sm italic">
+                       You are spending well. Your stack is already lean.
+                    </p>
+                  </div>
+                );
+              }else {
+                return (
+                  <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-xl text-center">
+                    <p className="text-blue-300 text-sm italic">
+                       Potential savings identified below.
+                    </p>
+                  </div>
+                );
+              }
+            })()}
+          </div>
+
+          {/* AI Box */}
           <div className="p-5 bg-slate-950 border border-slate-800 rounded-2xl relative overflow-hidden">
             <h4 className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-50">Personalized Strategy</h4>
             {loadingSummary ? (
               <div className="space-y-2 animate-pulse">
                 <div className="h-3 bg-slate-800 rounded w-full"></div>
                 <div className="h-3 bg-slate-800 rounded w-5/6"></div>
-                <div className="h-3 bg-slate-800 rounded w-4/6"></div>
               </div>
             ) : (
-              <p className="text-slate-300 text-sm leading-relaxed italic">
-                {aiSummary || "Audit complete. Review your personalized breakdown below for specific savings actions."}
-              </p>
+              <div className="text-slate-300 text-sm leading-relaxed italic prose ">
+                <ReactMarkdown>{aiSummary || "Audit complete. Review your personalized breakdown below for specific savings actions."}</ReactMarkdown>
+              </div>
             )}
           </div>
 
-          {/* 2. Conditional Messaging */}
-          {(() => {
-            const annualSavings = getAuditReport().reduce((acc, item) => acc + item.savings, 0);
-            const monthlySavings = annualSavings / 12;
-
-            if (monthlySavings >= 500) { 
-              return (
-                <div className="p-4 bg-orange-500/20 border border-orange-500/50 rounded-xl text-center">
-                  <p className="text-orange-700 text-sm font-bold">
-                     High Savings Detected! Capture this with{" "}
-                    <a href="https://credex.ai" target="_blank" rel="noopener noreferrer" className="text-orange-500 underline hover:text-blue-200">
-                      Credex
-                    </a>
-                  </p>
-                </div>
-              );
-            } else if (monthlySavings < 100 || getAuditReport().length === 0) {
-              return (
-                <div className="p-4 bg-slate-800 rounded-xl text-center">
-                  <p className="text-blue-300 text-sm italic">
-                    You&rsquo;re spending well. Your stack is already lean.
-                  </p>
-                </div>
-              );
-            }
-            return null;
-          })()}
-
+          {/* Breakdown List */}
           <div className="space-y-3">
             <h4 className="text-white text-sm font-bold px-1">Optimization Breakdown:</h4>
             {getAuditReport().map((item, i) => (
@@ -421,6 +427,7 @@ export default function AuditForm() {
             ))}
           </div>
 
+          {/* Email CTA */}
           <div className="p-6 bg-emerald-500 rounded-2xl shadow-[0_20px_50px_rgba(16,185,129,0.2)]">
             <h4 className="text-slate-950 font-black text-lg leading-tight mb-1">
               {getAuditReport().reduce((acc, item) => acc + item.savings, 0) < 150 
