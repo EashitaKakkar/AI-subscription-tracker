@@ -17,7 +17,6 @@ interface AdviceItem {
   reason: string;
 }
 
-// --- Constants ---
 
 const USE_CASES = ["Coding/Debugging", "Content/Marketing", "Data Analysis", "UI/UX Design", "General Research", "Mixed / Internal Tooling"];
 
@@ -111,10 +110,6 @@ export default function AuditForm() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   
 
-  // 2. Optimized Mount Effect
-  // To satisfy the "no sync setState" rule, we wrap the call 
-  // in a requestAnimationFrame or a timeout, which pushes it 
-  // out of the synchronous execution thread of the effect.
   useEffect(() => {
     const timer = requestAnimationFrame(() => {
       setIsMounted(true);
@@ -122,7 +117,6 @@ export default function AuditForm() {
     return () => cancelAnimationFrame(timer);
   }, []);
 
-  // 3. PERSISTENCE EFFECT
   useEffect(() => { 
     if (isMounted && typeof window !== "undefined") {
       localStorage.setItem('spendlens_data', JSON.stringify(formData));
@@ -141,7 +135,7 @@ export default function AuditForm() {
       }
     }));
   }, []);
-  // PERFORMANCE: Memoized audit calculation
+
   const auditReport = useMemo((): AdviceItem[] => {
     const advice: AdviceItem[] = [];
     const seats = parseInt(formData.teamSize) || 0;
@@ -230,44 +224,40 @@ export default function AuditForm() {
     const requiresCredexOutreach = (totalSavings / 12) >= 500;
 
     try {
-      const { data: dbData, error: dbError } = await supabase
-        .from('audits')
-        .insert([{
-          total_savings: totalSavings,
-          team_size: formData.teamSize,
-          tools: formData.selectedTools,
-          advice: auditReport,
-          email: userEmail,
-          requires_outreach: requiresCredexOutreach
-        }])
-        .select('id')
-        .single();
-
-      if (dbError) throw new Error(dbError.message);
-
-      const generatedUrl = `${window.location.origin}/share/${dbData.id}`;
-      setShareUrl(generatedUrl);
-
+      
       const response = await fetch('/api/send-audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
           email: userEmail,
+          teamSize: formData.teamSize,
+          tools: formData.selectedTools,
           savings: totalSavings,
           advice: auditReport,
+          aiSummary: aiSummary,
           requiresOutreach: requiresCredexOutreach,
-          auditUrl: generatedUrl
+          inputStack: formData.plans,
+          pricingSnapshot: TOOL_PRICES,
         }),
       });
 
-      if (response.ok) alert(`Audit report saved and sent to ${userEmail}!`);
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(`Error saving report: ${result.error || "Unknown server error"}`);
+        return;
+      }
+
+      const generatedUrl = `${window.location.origin}/share/${result.id}`;
+      setShareUrl(generatedUrl);
+
+      alert(`Audit report saved and sent to ${userEmail}!`);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-  console.error(errorMessage);
+        const errorMsg = error instanceof Error ? error.message : "Network request failed";
+        console.error("Submission failed:", errorMsg);
+        alert(`Network Error: ${errorMsg}`);
     }
   };
-
   if (!isMounted) return <div className="max-w-2xl mx-auto p-8 bg-slate-900 rounded-2xl animate-pulse h-64 my-10" />;
 
   return (
