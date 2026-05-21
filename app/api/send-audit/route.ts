@@ -1,8 +1,12 @@
 import { Resend } from 'resend';
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase'; // Ensure this path is correct
+import { createClient } from '@supabase/supabase-js'; 
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const serverSupabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface AdviceItem {
   tool: string;
@@ -13,31 +17,32 @@ interface AdviceItem {
 
 export async function POST(req: Request) {
   try {
-    const { email, teamSize, tools, savings, advice = [], aiSummary } = await req.json();
+    const { email, teamSize, tools, savings, advice = [], aiSummary, inputStack, pricingSnapshot } = await req.json();
 
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
-    // 1. Save to Supabase first to get the unique ID for the shareable link
-    const { data: dbData, error: dbError } = await supabase
+    const { data: dbData, error: dbError } = await serverSupabase
       .from('audits')
       .insert([{ 
         email, 
         team_size: teamSize, 
-        total_savings: savings, 
+        total_savings: savings,
+        tools: Array.isArray(tools) ? tools : [], 
         advice, 
-        ai_summary: aiSummary 
+        ai_summary: aiSummary,
+        input_stack: inputStack,
+        pricing_snapshot: pricingSnapshot
       }])
       .select()
       .single();
 
     if (dbError) {
       console.error("Supabase Save Error:", dbError.message);
-      return NextResponse.json({ error: "Database save failed" }, { status: 500 });
+      return NextResponse.json({ error: `Database save failed: ${dbError.message}` }, { status: 500 });
     }
 
-    // Generate the full URL for the share page
     const baseUrl = new URL(req.url).origin;
     const shareLink = `${baseUrl}/share/${dbData.id}`;
 
@@ -50,7 +55,7 @@ export async function POST(req: Request) {
     if (isOptimal) {
       emailHtml = `
         <div style="font-family: sans-serif; color: #334155; line-height: 1.6;">
-          <h1 style="color: #10b981;">Your AI Stack is Lean! ✨</h1>
+          <h1 style="color: #10b981;">Your AI Stack is Lean! </h1>
           <p>Great work. Our audit shows your current setup is highly optimized for your team of <strong>${teamSize}</strong>.</p>
           <div style="margin: 20px 0;">
             <a href="${shareLink}" style="background: #10b981; color: white; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: bold;">View Audit Dashboard</a>
@@ -62,7 +67,7 @@ export async function POST(req: Request) {
     } else {
       emailHtml = `
         <div style="font-family: sans-serif; color: #334155; line-height: 1.6; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #0f172a;">Your AI Spend Audit Results 📊</h1>
+          <h1 style="color: #0f172a;">Your AI Spend Audit Results </h1>
           <p style="font-size: 18px;">We've identified <strong>$${savings}</strong> in potential annual savings for your team.</p>
           
           <div style="margin: 25px 0; text-align: center;">
@@ -98,7 +103,6 @@ export async function POST(req: Request) {
       html: emailHtml,
     });
 
-    // Return the ID so the frontend can redirect if needed
     return NextResponse.json({ 
       success: true, 
       id: dbData.id, 

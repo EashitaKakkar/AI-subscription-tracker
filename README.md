@@ -1,13 +1,13 @@
 
-# 🛡️ SpendLens: AI Spend Audit
+#  SpendLens: AI Spend Audit
 
 A high-fidelity tool built for startup founders and engineering managers to audit, optimize, and reduce their annual AI software spend. By analyzing team size and tool overlap, **SpendLens** identifies redundant subscriptions and surfaces real-world savings through smarter tier management and Credex infrastructure credits.
 
-**Live Demo:** [https://ai-subscription-tracker-89nnlm0ju-eashitakakkars-projects.vercel.app/](https://ai-subscription-tracker-89nnlm0ju-eashitakakkars-projects.vercel.app/)
+**Live Demo:** [SpendLens](https://ai-subscription-tracker-two.vercel.app/)
 
 ---
 
-## 📸 Proof of Concept
+## Proof of Concept
 
 [https://youtu.be/3ygin-oGzus](https://youtu.be/3ygin-oGzus)
 ---
@@ -46,7 +46,7 @@ Push to GitHub and connect your repository to Vercel. Ensure all Environment Var
 
 - Schema Cache over Real-time Sync: To keep the app highly performant, I utilized Supabase RLS policies and optimized schema structures. This minimized latency in the shareable URL generation, ensuring the user gets their "viral" link instantly.
 
-# 🛠️ Tech Stack
+#  Tech Stack
 Framework: Next.js 15+ (App Router)
 
 Language: TypeScript (Strict Mode)
